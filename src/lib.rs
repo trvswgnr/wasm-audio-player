@@ -9,6 +9,10 @@ use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{console, AudioBuffer, AudioContext, AudioContextState, GainNode};
 
+// Use `wee_alloc` as the global allocator (to reduce binary size)
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
 /// Plays an audio file.
 ///
 /// The user will upload a file with an HTML input element, and we'll pass the
