@@ -28,7 +28,7 @@ features = [
   'AudioBuffer',
   'AudioBufferSourceNode',
   'AudioDestinationNode',
-  'GainNode',
   'AudioParam',
+  'GainNode',
   'Window',
 ]
