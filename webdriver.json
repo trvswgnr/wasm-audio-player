@@ -1,0 +1,15 @@
+{
+    "moz:firefoxOptions": {
+        "prefs": {
+            "media.navigator.audio.fake": true,
+            "media.volume_scale": "0.0"
+        },
+        "args": []
+    },
+    "goog:chromeOptions": {
+        "args": [
+            "--autoplay-policy=no-user-gesture-required",
+            "--mute-audio"
+        ]
+    }
+}
