@@ -4,7 +4,7 @@
 
 use std::{cell::RefCell, future::Future, rc::Rc};
 
-use js_sys::{Array, Uint8Array};
+use js_sys::Uint8Array;
 use wasm_bindgen::{prelude::*, JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{console, AudioBuffer, AudioContext, AudioContextState, GainNode};
@@ -13,6 +13,19 @@ use web_sys::{console, AudioBuffer, AudioContext, AudioContextState, GainNode};
 ///
 /// The user will upload a file with an HTML input element, and we'll pass the
 /// file to this function from JavaScript.
+///
+/// # JavaScript Usage
+/// ```js
+/// import init, { play_file } from './pkg/wasm_audio_player.js';
+/// let audioContext = null;
+/// let gainNode = null;
+/// const file = document.getElementById("audioFile").files[0];
+/// const fileData = await file.arrayBuffer();
+/// const bytes = new Uint8Array(fileData);
+/// play_file(bytes, audioContext, gainNode).then(data => {
+///     audioContext = data[0];
+///     gainNode = data[1];
+/// });
 #[wasm_bindgen]
 pub async fn play_file(
     file_array: Uint8Array,
@@ -33,6 +46,8 @@ pub async fn play_file(
         }
     };
 
+    let mut return_data = ReturnData::new().unwrap();
+
     if using_existing_context {
         if gain_node.is_none() {
             console::log_1(&"no gain node".into());
@@ -42,7 +57,9 @@ pub async fn play_file(
         // if the audio context is closed, we can't do anything with it
         if audio_ctx.state() == AudioContextState::Closed {
             console::log_1(&"audio context is closed".into());
-            return Ok(Array::of2(&audio_ctx.into(), &gain_node.into()).into());
+            return_data.set_audio_ctx(Some(audio_ctx));
+            return_data.set_gain_node(gain_node);
+            return Ok(return_data.into());
         }
 
         // if already playing, pause
@@ -69,7 +86,9 @@ pub async fn play_file(
             );
 
             console::log_1(&"paused".into());
-            return Ok(Array::of2(&audio_ctx.into(), &gain_node.into()).into());
+            return_data.set_audio_ctx(Some(audio_ctx));
+            return_data.set_gain_node(gain_node);
+            return Ok(return_data.into());
         }
 
         // if paused, resume
@@ -88,7 +107,9 @@ pub async fn play_file(
 
             console::log_1(&"state should be running".into());
             console::log_1(&format!("state: {:?}", ctx.state()).into());
-            return Ok(Array::of2(&audio_ctx.into(), &gain_node.into()).into());
+            return_data.set_audio_ctx(Some(audio_ctx));
+            return_data.set_gain_node(gain_node);
+            return Ok(return_data.into());
         }
     }
 
@@ -110,7 +131,10 @@ pub async fn play_file(
     console::log_1(&"state should be running".into());
     console::log_1(&format!("state: {:?}", audio_ctx.state()).into());
 
-    return Ok(Array::of2(&audio_ctx, &gain_node).into()).into();
+    return_data.set_audio_ctx(Some(audio_ctx));
+    return_data.set_gain_node(Some(gain_node));
+
+    Ok(return_data.into())
 }
 
 /// A wrapper for window.setTimeout that takes a closure instead of a function.
@@ -238,4 +262,43 @@ macro_rules! await_js {
     ($value:expr) => {
         wasm_bindgen_futures::JsFuture::from($value).await
     };
+}
+
+#[wasm_bindgen]
+pub struct ReturnData {
+    audio_ctx: Option<AudioContext>,
+    gain_node: Option<GainNode>,
+}
+
+#[wasm_bindgen]
+impl ReturnData {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Result<ReturnData, JsValue> {
+        let audio_ctx = None;
+        let gain_node = None;
+        Ok(ReturnData {
+            audio_ctx,
+            gain_node,
+        })
+    }
+
+    pub fn set_audio_ctx(&mut self, audio_ctx: Option<AudioContext>) {
+        self.audio_ctx = audio_ctx.clone();
+    }
+
+    pub fn set_gain_node(&mut self, gain_node: Option<GainNode>) {
+        self.gain_node = gain_node.clone();
+    }
+
+    #[wasm_bindgen(getter)]
+    #[wasm_bindgen(js_name = audioCtx)]
+    pub fn get_audio_ctx(&self) -> Option<AudioContext> {
+        self.audio_ctx.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    #[wasm_bindgen(js_name = gainNode)]
+    pub fn get_gain_node(&self) -> Option<GainNode> {
+        self.gain_node.clone()
+    }
 }
