@@ -4,88 +4,144 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>WASM/Rust Audio Player</title>
 </head>
 <body>
-    <form id="chooseFileForm">
-        Audio File: <input type="file" id="audioFile" name="audioFile" accept="audio/*" />
+    <h1>WASM/Rust Audio Player</h1>
+    <p>Play an audio file using WASM and Rust</p>
+
+    <input type="file" id="audioFile" name="audioFile" accept="audio/*" />
+    <form id="playAudioFileWasm">
+        <h2>Play Audio File (WASM)</h2>
         <input type="submit" value="Play" />
+        <h3>Performance</h3>
+        <pre id="performanceWasm"></pre>
+    </form>
+    <hr>
+    <form id="playAudioFileJs">
+        <h2>Play Audio File (JS)</h2>
+        <input type="submit" value="Play" />
+        <h3>Performance</h3>
+        <pre id="performanceJs"></pre>
     </form>
     
     <script type="module">
         // using wasm with rust:
         import init, { play_file } from './pkg/wasm_audio_player.js';
-        let audioCtx = null;
-        let gainNode = null;
-        const run = () => {
-            document.getElementById("chooseFileForm").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                console.log('using wasm with rust');
-                const file = document.getElementById("audioFile").files[0];
-                const fileData = await file.arrayBuffer();
-                const bytes = new Uint8Array(fileData);
-                play_file(bytes, audioCtx, gainNode).then(data => {
-                    audioCtx = data.audioCtx;
-                    gainNode = data.gainNode;
-                    console.log(audioCtx);
-                    console.log(gainNode);
+        function playAudioFileWasm() {
+            let audioCtx = null;
+            let gainNode = null;
+            let runs = 0;
+            let performanceWasm = document.getElementById("performanceWasm");
+            const run = () => {
+                document.getElementById("playAudioFileWasm").addEventListener("submit", async (e) => {
+                    // measure the performance of the wasm
+                    e.preventDefault();
+                    
+                    const start = performance.now();
+                    const file = document.getElementById("audioFile").files[0];
+                    const fileData = await file.arrayBuffer();
+                    const bytes = new Uint8Array(fileData);
+                    let run_type = audioCtx ? 'resume' : 'play';
+                    if (audioCtx && audioCtx.state === 'running') {
+                        run_type = 'pause';
+                    }
+                    play_file(bytes, audioCtx, gainNode).then(data => {
+                        audioCtx = data.audioCtx;
+                        gainNode = data.gainNode;
+                        runs++;
+                        const end = performance.now();
+                        performanceWasm.innerHTML += `${runs} (${run_type}): ${end - start}ms \n`; 
+                    });
                 });
-            });
-        };
+            };
 
-        init().then(run)
+            init().then(run)
+        }
+
+        playAudioFileWasm();
 
         // using vanilla js:
-        // let audioContext = null;
-        // const run = () => {
-        //     document.getElementById("chooseFileForm").addEventListener("submit", async (e) => {
-        //         e.preventDefault();
-        //         console.log('using vanilla js');
-        //         const file = document.getElementById("audioFile").files[0];
-        //         const fileData = await file.arrayBuffer();
-        //         const bytes = new Uint8Array(fileData);
-        //         playFile(bytes, audioContext).then(ctx => {
-        //             audioContext = ctx;
-        //             console.log(ctx);
-        //         });
-        //     });
-        // };
+        function playAudioFileJs() {
+            let audioCtx = null;
+            let gainNode = null;
+            let runs = 0;
+            let performanceJs = document.getElementById("performanceJs");
+            const run = () => {
+                document.getElementById("playAudioFileJs").addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    
+                    const start = performance.now();
+                    const file = document.getElementById("audioFile").files[0];
+                    const fileData = await file.arrayBuffer();
+                    const bytes = new Uint8Array(fileData);
+                    let run_type = audioCtx ? 'resume' : 'play';
+                    if (audioCtx && audioCtx.state === 'running') {
+                        run_type = 'pause';
+                    }
+                    playFile(bytes, audioCtx, gainNode).then(data => {
+                        audioCtx = data.audioCtx;
+                        gainNode = data.gainNode;
+                        runs++;
+                        const end = performance.now();
+                        performanceJs.innerHTML += `${runs} (${run_type}): ${end - start}ms \n`;
+                    });
+                });
+            };
 
-        // function playFile(bytes, audioContext = null) {
-        //     if (audioContext) {
-        //         if (audioContext.state === 'closed') {
-        //             audioContext = null;
-        //         }
+            function playFile(bytes, audioCtx = null, gainNode = null) {
+                if (audioCtx) {
+                    // convert to a switch statement
+                    let taper = 0.2;
+                    switch (audioCtx.state) {
+                        case 'closed':
+                            audioCtx = null;
+                            gainNode = null;
+                            break;
+                        case 'suspended':
+                            gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+                            gainNode.gain.linearRampToValueAtTime(1, audioCtx.currentTime + taper);
+                            audioCtx.resume();
+                            break;
+                        case 'running':
+                            gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+                            gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + taper);
+                            setTimeout(() => {
+                                audioCtx.suspend();
+                            }, taper * 1000);
+                            break;
+                        default:
+                            break;
+                    }
 
-        //         if (audioContext.state === 'suspended') {
-        //             audioContext.resume();
-        //         }
+                    return new Promise((resolve, reject) => {
+                        resolve({audioCtx, gainNode});
+                    });
+                }
+                return new Promise((resolve, reject) => {
+                    if (audioCtx === null) {
+                        audioCtx = new AudioContext();
+                    }
+                    audioCtx.decodeAudioData(bytes.buffer, (buffer) => {
+                        const source = audioCtx.createBufferSource();
+                        source.buffer = buffer;
 
-        //         if (audioContext.state === 'running') {
-        //             audioContext.suspend();
-        //         }
+                        const gainNode = audioCtx.createGain();
+                        gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
 
-        //         return new Promise((resolve, reject) => {
-        //             resolve(audioContext);
-        //         });
-        //     }
-        //     return new Promise((resolve, reject) => {
-        //         if (audioContext === null) {
-        //             audioContext = new AudioContext();
-        //         }
-        //         audioContext.decodeAudioData(bytes.buffer, (buffer) => {
-        //             const source = audioContext.createBufferSource();
-        //             source.buffer = buffer;
-        //             source.connect(audioContext.destination);
-        //             source.start();
-        //             resolve(audioContext);
-        //         }, (err) => {
-        //             reject(err);
-        //         });
-        //     });
-        // }
+                        source.connect(gainNode).connect(audioCtx.destination);
+                        source.start();
+                        resolve({audioCtx, gainNode});
+                    }, (err) => {
+                        reject(err);
+                    });
+                });
+            }
 
-        // run();
+            run();
+        }
+
+        playAudioFileJs();
 
     </script>
 </body>
