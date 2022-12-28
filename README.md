@@ -25,7 +25,7 @@ After building, simply open `index.html` (in the root directory) in your browser
 
 ## Performance Observations
 
-Overall the WASM version is currently slower than the vanilla JS version. For the first round, the initial play is around **16.4%** slower, the pause times for both are about the same, but the resumes are around **197%** slower. On average, the WASM version is **~59%** slower than the JS version.
+Overall the WASM version is currently slower than the vanilla JS version. For the first round, the initial play is around **16.4%** slower, the pause times for both are about the same, but the resumes are around **197%** slower. On average, the WASM version is **59%** slower than the JS version.
 
 The WASM binary is currently **700%** larger than the JS file (32KB vs 4KB); the difference would be even more dramatic if the JS file was minified.
 
