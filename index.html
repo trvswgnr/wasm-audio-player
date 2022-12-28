@@ -15,7 +15,7 @@
     <script type="module">
         // using wasm with rust:
         import init, { play_file } from './pkg/wasm_audio_player.js';
-        let audioContext = null;
+        let audioCtx = null;
         let gainNode = null;
         const run = () => {
             document.getElementById("chooseFileForm").addEventListener("submit", async (e) => {
@@ -24,10 +24,10 @@
                 const file = document.getElementById("audioFile").files[0];
                 const fileData = await file.arrayBuffer();
                 const bytes = new Uint8Array(fileData);
-                play_file(bytes, audioContext, gainNode).then(data => {
-                    audioContext = data[0];
-                    gainNode = data[1];
-                    console.log(audioContext);
+                play_file(bytes, audioCtx, gainNode).then(data => {
+                    audioCtx = data.audioCtx;
+                    gainNode = data.gainNode;
+                    console.log(audioCtx);
                     console.log(gainNode);
                 });
             });
